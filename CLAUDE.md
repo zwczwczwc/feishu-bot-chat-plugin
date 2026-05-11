@@ -108,7 +108,7 @@ the A2A Core Engine to Hermes's plugin hook system (`pre_gateway_dispatch`,
 
 Hermes Agent's Feishu gateway adapter (`gateway/platforms/feishu.py`) sends
 outgoing messages as plain text by default.  When the A2A plugin's
-`transform_llm_output` hook injects ``<at>`` tags into the response, Feishu
+`transform_llm_output` hook injects `<at>` tags into the response, Feishu
 renders them as **literal plain text** rather than clickable @-mentions.
 
 Run the included patch script to fix this::
@@ -126,6 +126,43 @@ This modifies `feishu.py` to:
 After patching, restart the gateway::
 
     systemctl --user restart hermes-gateway
+
+### User-Identity Sending (Bot-to-Bot Bypass)
+
+Feishu **blocks bot-to-bot message delivery** — when Hermes sends a message
+as a bot that @-mentions another bot (e.g. OpenClaw), the target bot never
+receives it.
+
+The adapter works around this by detecting @-mentions of known companion
+bots and sending those messages **as the user's identity** via direct HTTP
+API call with a user access token.
+
+**Setup:**
+
+1. Install Feishu CLI: ``npm install -g @larksuite/cli``
+2. Set ``FEISHU_COMPANION_BOT_IDS=ou_xxx`` in ``~/.hermes/.env``
+3. Run ``python3 feishu_user_auth.py`` and complete OAuth to get a user token
+4. The gateway adapter automatically uses user identity when @-mentioning
+   a companion bot (detected in ``_send_raw_message`` → check via
+   ``_mentions_companion_bot()``)
+
+**Key files:**
+
+- ``gateway/platforms/feishu_user_auth.py`` — OAuth flow, token storage,
+  token auto-refresh, and ``send_message_as_user_http()``
+- ``gateway/platforms/feishu.py`` — modified ``_send_raw_message`` with
+  user-identity intercept, plus ``_have_companion_bots()`` and
+  ``_mentions_companion_bot()`` helpers
+
+**Token lifecycle:** Stored in ``~/.hermes/feishu_user_token.json``.
+Auto-refreshed when < 5 minutes remaining. Falls back to bot identity
+gracefully if user token is unavailable.
+
+**Architecture:**
+- Real-time messaging (receive + normal replies) still goes through
+  Hermes's built-in Feishu WebSocket adapter (bot identity)
+- Only messages @-mentioning companion bots are redirected through the
+  user-identity HTTP path
 
 ### Configuration
 

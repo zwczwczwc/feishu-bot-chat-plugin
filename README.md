@@ -209,18 +209,94 @@ FEISHU_DOMAIN=feishu          # 或 lark（国际版）
 FEISHU_CONNECTION_MODE=websocket  # 或 webhook
 ```
 
-#### 4️⃣ 重启 Gateway
+#### 4️⃣ 打补丁：让 @ 标签渲染为可点击艾特
+
+Hermes 内置的飞书适配器（`gateway/platforms/feishu.py`）默认用 `text` 格式发送消息，`<at>` 标签会被渲染为纯文本。需运行补丁脚本：
+
+```bash
+# 在插件仓库根目录执行
+python3 scripts/patch-hermes-feishu-adapter.py
+
+# 重启 Gateway
+hermes gateway restart
+```
+
+补丁作用：检测消息中的 `<at user_id="..."` 标签 → 改用 **post 格式** 发送，飞书正确渲染为可点击的 @ 艾特。
+
+#### 5️⃣ 重启 Gateway
 
 ```bash
 hermes gateway restart
 ```
 
-#### 5️⃣ 验证
+#### 6️⃣ 配置用户身份发送（Bot @ Bot 协作）
+
+> ⚠️ **飞书限制：Bot 无法接收其他 Bot 的消息。** Hermes 内置的飞书适配器以 **Bot 身份** 发送消息，OpenClaw（或任何其他 Bot）**收不到** 来自 Hermes 的 @ 消息。
+
+**解决方案**：使用 **飞书 CLI** + **用户身份 token**，让 @ 其他 Bot 的消息**以你的飞书身份**发送。
+
+##### 第 1 步：安装飞书 CLI
+
+```bash
+npm install -g @larksuite/cli
+npx skills add larksuite/cli -y -g
+```
+
+##### 第 2 步：配置 Companion Bot
+
+在 `~/.hermes/.env` 中添加 companion bot 的 open_id：
+
+```bash
+# OpenClaw 或其他协作 Bot 的 open_id（在群中 @ 该 Bot 时可见）
+FEISHU_COMPANION_BOT_IDS=ou_xxxxxxxxxxxxxxxxxx
+```
+
+多个 Bot 用逗号分隔：`FEISHU_COMPANION_BOT_IDS=ou_a,ou_b`。
+
+##### 第 3 步：完成用户 OAuth 授权
+
+运行授权脚本：
+
+```bash
+cd ~/.hermes
+python3 feishu_user_auth.py
+```
+
+脚本会生成一个授权链接，**在浏览器打开并扫码授权**。授权完成后，token 自动保存到 `~/.hermes/feishu_user_token.json`，并会自动续期。
+
+> 首次授权需要飞书开发者后台添加回调 URL：**应用 → 安全设置 → 重定向 URL** 添加 `http://YOUR_SERVER_IP:18888/callback`
+
+##### 工作原理
+
+```
+┌─ 实时通信（WebSocket）──────────────┐    ┌─ 身份切换 ─────────────┐
+│                                     │    │                        │
+│  Hermes ←→ 飞书（Bot 身份）          │    │  @OpenClaw 检测         │
+│  - 接收群消息                        │    │     ↓                  │
+│  - 回复普通消息                      │    │  走飞书 CLI HTTP API   │
+│  - 管理 reactions                    │    │  用 User Token 发送    │
+│                                     │    │  消息来源显示为「你」   │
+└─────────────────────────────────────┘    └────────────────────────┘
+```
+
+| 消息类型 | 发送身份 | 通道 | OpenClaw 能否收到 |
+|---------|---------|------|-----------------|
+| 普通回复（不 @ 任何 Bot） | 🤖 Hermes Bot | WebSocket | ✅ 正常 |
+| @OpenClaw 协作消息 | 👤 **你的身份** | HTTP API | ✅ **可以收到** |
+| @其他普通用户 | 🤖 Hermes Bot | WebSocket | ✅ 正常 |
+
+##### 依赖要求
+
+- **Node.js ≥ 18**（安装飞书 CLI 需要 `npm`）
+- **Python 3.11+**（运行授权脚本）
+- **飞书开发者后台权限**：`im:message.group_at_msg.include_bot:readonly`
+
+#### 7️⃣ 验证
 
 在飞书群中 @ 你的 Bot，确认可用。日志路径：
 
 ```bash
-tail -f ~/.hermes/logs/gateway.log | grep "feishu-a2a\|A2A"
+tail -f ~/.hermes/logs/gateway.log | grep "feishu-a2a\\|A2A\\|user.identity"
 ```
 
 ---

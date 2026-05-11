@@ -5,6 +5,11 @@ Maps the A2A Core Engine (core/) to Hermes Agent's plugin hook system.
 IMPORTANT: The pre_gateway_dispatch hook receives `event` as a
 ``MessageEvent`` dataclass (from gateway/platforms/base.py), NOT a dict.
 Use attribute access (``event.source.platform``), not ``.get()``.
+
+DEPENDENCY: For Bot-to-Bot @ communication, Hermes's Feishu gateway
+adapter must be patched (see scripts/patch-hermes-feishu-adapter.py)
+and the Feishu CLI must be installed (npm install -g @larksuite/cli)
+with user OAuth completed. See README.md → Hermes Agent → Step 6.
 """
 
 import json
