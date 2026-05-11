@@ -98,8 +98,59 @@ The plugin provides 6 skills to help bots collaborate effectively:
 
 Skills are automatically loaded by OpenClaw from the `skills/` directory.
 
+## Hermes Agent Adapter
+
+The plugin includes a **Hermes Agent** adapter at `adapters/hermes/` that maps
+the A2A Core Engine to Hermes's plugin hook system (`pre_gateway_dispatch`,
+`transform_llm_output`, `on_session_start`).
+
+### Core Patch Required
+
+Hermes Agent's Feishu gateway adapter (`gateway/platforms/feishu.py`) sends
+outgoing messages as plain text by default.  When the A2A plugin's
+`transform_llm_output` hook injects ``<at>`` tags into the response, Feishu
+renders them as **literal plain text** rather than clickable @-mentions.
+
+Run the included patch script to fix this::
+
+    python3 scripts/patch-hermes-feishu-adapter.py
+
+This modifies `feishu.py` to:
+
+1. Detect ``<at user_id="...">name</at>`` tags in outgoing content
+2. Switch from text format to **post format** with explicit ``at`` elements
+   (``{"tag": "at", "user_id": "ou_xxx"}``)
+3. Split text at ``<at>`` boundaries so prose before/after remains as
+   ``{"tag": "md", "text": "..."}`` elements
+
+After patching, restart the gateway::
+
+    systemctl --user restart hermes-gateway
+
+### Configuration
+
+For A2A collaboration with multiple Feishu bots, add each bot's credentials
+to `~/.hermes/config.yaml` under `gateway.platforms.feishu.accounts`::
+
+```yaml
+gateway:
+  platforms:
+    feishu:
+      domain: feishu
+      accounts:
+        bot-a:
+          app_id: cli_xxxxxxxxxxxxxxxxxx
+          app_secret: your-secret-here
+        bot-b:
+          app_id: cli_yyyyyyyyyyyyyyyyyy
+          app_secret: other-bot-secret-here
+```
+
+The plugin auto-discovers all configured bots via the Feishu API and
+builds the collaboration registry.
+
 ## Dependencies
 
 Runtime: Node.js native modules only (`fs`, `path`, `os`)
 External: Feishu Open API (auth, bot info)
-Platform: OpenClaw plugin system
+Platform: OpenClaw plugin system / Hermes Agent plugin system

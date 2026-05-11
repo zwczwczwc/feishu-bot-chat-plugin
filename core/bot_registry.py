@@ -163,29 +163,72 @@ class BotRegistry:
         self.build_lookups(bots)
         return bots
 
+    # Known companion registry paths to scan for additional bots.
+    COMPANION_REGISTRIES = [
+        os.path.expanduser("~/.openclaw/fbc-registry/registry.json"),
+    ]
+
     def _discover_from_env(self) -> Dict[str, BotInfo]:
-        """Discover bot from FEISHU_APP_ID env var (single-bot fallback)."""
+        """Discover own bot from env vars, then merge companions."""
         app_id = os.environ.get("FEISHU_APP_ID", "")
         app_secret = os.environ.get("FEISHU_APP_SECRET", "")
         domain = os.environ.get("FEISHU_DOMAIN", "feishu")
 
-        if not app_id or not app_secret:
-            return {}
+        bots: Dict[str, BotInfo] = {}
 
-        try:
-            token = get_tenant_token_sync(app_id, app_secret, domain)
-            info = get_bot_info_sync(token, domain)
-            bots = {
-                "default": BotInfo(
+        # 1. Discover self from env
+        if app_id and app_secret:
+            try:
+                token = get_tenant_token_sync(app_id, app_secret, domain)
+                info = get_bot_info_sync(token, domain)
+                bots["default"] = BotInfo(
                     account_id="default",
                     bot_open_id=info["bot_open_id"],
                     bot_name=info["bot_name"],
                 )
-            }
+            except Exception:
+                pass
+
+        # 2. Scan companion registries for additional bots
+        self._merge_companion_registries(bots)
+
+        if bots:
             self.build_lookups(bots)
-            return bots
-        except Exception:
-            return {}
+        return bots
+
+    def _merge_companion_registries(self, bots: Dict[str, BotInfo]) -> None:
+        """Merge bots from companion registry files (e.g. OpenClaw's fbc-registry).
+
+        Companion bots are merged into ``bots`` in-place, keyed by their
+        ``accountId``.  Duplicate ``bot_open_id`` values are skipped so each
+        physical bot appears only once.
+        """
+        known_ids = {b.bot_open_id for b in bots.values()}
+
+        for reg_path in self.COMPANION_REGISTRIES:
+            if not os.path.isfile(reg_path):
+                continue
+            try:
+                import json
+                with open(reg_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                companion_bots = data.get("bots") or data.get("registry", {})
+                if isinstance(companion_bots, dict):
+                    for agent_id, info in companion_bots.items():
+                        if isinstance(info, dict):
+                            bot_open_id = info.get("botOpenId") or info.get("bot_open_id", "")
+                            if not bot_open_id or bot_open_id in known_ids:
+                                continue
+                            bot_name = info.get("botName") or info.get("bot_name", "")
+                            account_id = info.get("accountId") or info.get("account_id", agent_id)
+                            bots[agent_id] = BotInfo(
+                                account_id=account_id,
+                                bot_open_id=bot_open_id,
+                                bot_name=bot_name,
+                            )
+                            known_ids.add(bot_open_id)
+            except Exception:
+                continue
 
     # ---- Group member management ----
 
