@@ -54,13 +54,26 @@ Check registry cache: `~/.openclaw/fbc-registry/registry.json` (24h TTL)
 Plugin config in `~/.openclaw/openclaw.json` under `plugins.feishu-bot-chat`:
 - `botRegistry` (object) - Manual bot registry (overrides auto-discovery)
 
-## Key Files
+## Files
 
-- **index.js** - Main plugin implementation (~340 lines)
-- **openclaw.plugin.json** - Plugin metadata, config schema, and skills registration
-- **package.json** - Node.js >=18.0.0, OpenClaw >=2026.3.24-beta.2
-- **README.md** - Chinese documentation
-- **skills/** - A2A collaboration skills for bots (6 skills total)
+### Python (New — Cross-Platform Core Engine)
+- **core/__init__.py** - Package init
+- **core/feishu_api.py** - Feishu Open API client (token, bot info, members)
+- **core/bot_registry.py** - Bot discovery and in-memory registry
+- **core/mention_processor.py** - @botName ↔ <at> tag conversion
+- **core/message_filter.py** - Bot message filtering and A2A detection
+- **core/collaboration_rules.py** - A2A context injection for system prompts
+- **core/cache.py** - JSON file-based cache with TTL
+- **adapters/hermes/** - Hermes Agent plugin adapter
+- **adapters/template/** - Template adapter (reference for new Agent integrations)
+- **docs/adapter-protocol.md** - Adapter contract documentation
+- **tests/test_e2e.py** - Integration tests (pytest)
+- **pyproject.toml** - Python package config
+- **requirements.txt** - Python dependencies
+
+### Original (JS — OpenClaw Plugin)
+- **index.js** - Main plugin implementation (~485 lines)
+- **openclaw.plugin.json** - Plugin metadata
 
 ## Internal State
 

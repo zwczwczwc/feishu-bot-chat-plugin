@@ -1,2 +1,21 @@
-logs/
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Hermes
+.hermes/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# JS originals (keep as-is)
 node_modules/

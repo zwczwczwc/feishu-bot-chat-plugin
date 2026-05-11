@@ -1,0 +1,47 @@
+name: feishu-a2a
+version: 0.1.0
+description: "Feishu A2A Collaboration — enables bot-to-bot @ communication in Feishu group chats"
+author: Hermes Agent
+
+hooks:
+  - pre_gateway_dispatch
+  - transform_llm_output
+  - on_session_start
+
+tools:
+  - feishu_discover_bots
+
+skills:
+  - a2a-collaboration-guide
+  - a2a-task-decompose
+  - a2a-result-merge
+  - a2a-interrupt
+  - a2a-status-check
+  - a2a-mode-switch
+
+python_dependencies:
+  - aiohttp
+  - pyyaml
+
+config_schema:
+  type: object
+  properties:
+    bot_registry:
+      type: object
+      description: "Manual bot registry (overrides auto-discovery)"
+    cache_dir:
+      type: string
+      default: "~/.hermes/fbc-registry"
+      description: "Directory for registry cache"
+
+setup_guide: |
+  To install the Feishu A2A plugin:
+
+  1. Copy this directory to ~/.hermes/plugins/feishu-a2a/
+  2. Add "feishu-a2a" to the plugins.enabled list in config.yaml
+  3. Ensure FEISHU_APP_ID and FEISHU_APP_SECRET are set in ~/.hermes/.env
+  4. Restart the gateway
+
+  Required Feishu permission:
+  - im:message.group_at_msg.include_bot:readonly
+    (enable in Feishu Developer Console → 权限管理)

@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "feishu-a2a-collaboration"
+version = "0.1.0"
+description = "Feishu A2A Collaboration Plugin — Universal Python engine for bot-to-bot @ communication in Feishu group chats"
+readme = "README.md"
+authors = [
+    {name = "Hermes Agent Community"},
+]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "aiohttp>=3.9",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+hermes = []
+dev = [
+    "pytest>=7",
+    "pytest-asyncio>=0.23",
+]
+
+[tool.setuptools.packages.find]
+include = ["core*", "adapters*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
