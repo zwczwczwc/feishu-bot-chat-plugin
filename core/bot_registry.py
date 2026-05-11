@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set
 
 from .cache import Cache
-from .feishu_api import get_bot_info, get_group_bot_open_ids, get_tenant_token
+from .feishu_api import get_bot_info_sync, get_group_bot_open_ids, get_tenant_token_sync
 
 
 @dataclass
@@ -139,10 +139,10 @@ class BotRegistry:
                 # Check token cache
                 token = token_cache.get(account_id)
                 if not token:
-                    token = get_tenant_token(app_id, app_secret, domain)
+                    token = get_tenant_token_sync(app_id, app_secret, domain)
                     token_cache[account_id] = token
 
-                info = get_bot_info(token, domain)
+                info = get_bot_info_sync(token, domain)
                 bots[account_id] = BotInfo(
                     account_id=account_id,
                     bot_open_id=info["bot_open_id"],
@@ -173,8 +173,8 @@ class BotRegistry:
             return {}
 
         try:
-            token = get_tenant_token(app_id, app_secret, domain)
-            info = get_bot_info(token, domain)
+            token = get_tenant_token_sync(app_id, app_secret, domain)
+            info = get_bot_info_sync(token, domain)
             bots = {
                 "default": BotInfo(
                     account_id="default",

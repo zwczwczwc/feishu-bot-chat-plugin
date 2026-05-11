@@ -23,6 +23,77 @@ import aiohttp
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# Synchronous wrappers (for non-async contexts like hook handlers)
+# ---------------------------------------------------------------------------
+
+import json as _json
+import urllib.request as _urllib
+import urllib.error as _urlerror
+
+
+def _sync_post(url: str, data: dict) -> dict:
+    """Synchronous HTTP POST using stdlib (no aiohttp required)."""
+    req = _urllib.Request(
+        url,
+        data=_json.dumps(data).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+    )
+    with _urllib.urlopen(req, timeout=15) as resp:
+        return _json.loads(resp.read().decode("utf-8"))
+
+
+def _sync_get(url: str, headers: dict) -> dict:
+    """Synchronous HTTP GET using stdlib (no aiohttp required)."""
+    req = _urllib.Request(url, headers=headers)
+    with _urllib.urlopen(req, timeout=15) as resp:
+        return _json.loads(resp.read().decode("utf-8"))
+
+
+def get_tenant_token_sync(
+    app_id: str,
+    app_secret: str,
+    domain: str = "feishu",
+) -> str:
+    """Synchronous version of get_tenant_token — uses stdlib urllib.
+
+    Returns the tenant_access_token string.
+    Raises ValueError on API error.
+    """
+    base = _base_url(domain)
+    url = f"{base}/open-apis/auth/v3/tenant_access_token/internal"
+    data = _sync_post(url, {"app_id": app_id, "app_secret": app_secret})
+    if data.get("code") != 0:
+        raise ValueError(
+            f"tenant_token failed (sync): {data.get('msg', 'unknown error')}"
+        )
+    return data["tenant_access_token"]
+
+
+def get_bot_info_sync(
+    token: str,
+    domain: str = "feishu",
+) -> dict:
+    """Synchronous version of get_bot_info — uses stdlib urllib.
+
+    Returns dict with ``bot_open_id`` and ``bot_name``.
+    Raises ValueError on API error.
+    """
+    base = _base_url(domain)
+    url = f"{base}/open-apis/bot/v3/info"
+    headers = {"Authorization": f"Bearer {token}"}
+    data = _sync_get(url, headers)
+    if data.get("code") != 0:
+        raise ValueError(
+            f"bot/v3/info failed (sync): {data.get('msg', 'unknown error')}"
+        )
+    bot = data.get("bot") or {}
+    return {
+        "bot_open_id": bot.get("open_id", ""),
+        "bot_name": bot.get("app_name") or bot.get("bot_name", ""),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Domain helpers
 # ---------------------------------------------------------------------------
 

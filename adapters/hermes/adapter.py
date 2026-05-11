@@ -3,16 +3,15 @@
 Maps the A2A Core Engine (core/) to Hermes Agent's plugin hook system.
 """
 
+import json
 import os
-import re
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional
 
 from core.bot_registry import BotRegistry
 from core.cache import Cache
-from core.collaboration_rules import CollaborationRules
-from core.feishu_api import get_tenant_token, get_bot_info
-from core.mention_processor import MentionProcessor
-from core.message_filter import MessageFilter
+from core.collaboration_rules import build_collaboration_context
+from core.feishu_api import get_bot_info_sync, get_tenant_token_sync
+from core.mention_processor import outgoing_convert
 
 
 class FeishuA2AAdapter:
@@ -21,8 +20,6 @@ class FeishuA2AAdapter:
     def __init__(self):
         self.cache = Cache()
         self.bot_registry = BotRegistry(cache=self.cache)
-        self.message_filter = MessageFilter()
-        self.collaboration_rules = CollaborationRules()
         self._initialized = False
 
     def initialize(self) -> None:
@@ -31,6 +28,19 @@ class FeishuA2AAdapter:
             return
         self.bot_registry.discover_from_hermes_config()
         self._initialized = True
+
+    def _bot_registry_as_dict(self) -> Dict[str, Dict[str, Any]]:
+        """Convert BotRegistry.bots (dict of BotInfo) to the dict-of-dicts
+        format expected by core functions (botName, botOpenId, accountId)."""
+        return {
+            agent_id: {
+                "botName": bot.bot_name,
+                "botOpenId": bot.bot_open_id,
+                "accountId": bot.account_id,
+                "description": getattr(bot, "description", ""),
+            }
+            for agent_id, bot in self.bot_registry.bots.items()
+        }
 
     # ---- Hook: pre_gateway_dispatch ----
 
@@ -51,8 +61,7 @@ class FeishuA2AAdapter:
 
         # Check if sender is a known bot
         if not self.bot_registry.is_known_bot(sender_id):
-            # Human message — pass through
-            return None
+            return None  # Human message — pass through
 
         # Bot message with wasMentioned=true → native A2A delivery confirmed
         if was_mentioned:
@@ -71,7 +80,6 @@ class FeishuA2AAdapter:
                 )
                 return {"content": sender_info + content}
 
-            # Bot @mention but no rewrite needed
             return None
 
         # Bot message without mention — swallow it
@@ -82,25 +90,33 @@ class FeishuA2AAdapter:
     def process_outgoing(self, text: str) -> Optional[str]:
         """Convert @BotName to <at> tags. Maps from message_sending."""
         self.initialize()
-        return MentionProcessor.outgoing_convert(text, self.bot_registry)
+        reg = self._bot_registry_as_dict()
+        return outgoing_convert(text, reg)
 
     # ---- Hook: on_session_start ----
 
     def build_context(self, chat_id: str) -> Optional[str]:
         """Build A2A collaboration context. Maps from before_prompt_build."""
         self.initialize()
-        return self.collaboration_rules.build_context(
-            chat_id=chat_id,
-            bot_registry=self.bot_registry,
+
+        reg_dict = self._bot_registry_as_dict()
+        current_agent_id = os.environ.get("HERMES_AGENT_ID", "")
+
+        # Build session_key from chat_id for the core function
+        session_key = f":feishu:group:{chat_id}"
+
+        return build_collaboration_context(
+            channel_id="feishu",
+            current_agent_id=current_agent_id,
+            session_key=session_key,
+            bot_registry=reg_dict,
             native_a2a_chats=self.bot_registry.native_a2a_chats,
-            current_agent_id=os.environ.get("HERMES_AGENT_ID", ""),
         )
 
     # ---- Tool: feishu_discover_bots ----
 
     def discover_bots_tool(self) -> str:
         """Tool function that returns available Feishu bots as formatted text."""
-        import json
         self.initialize()
         bots = self.bot_registry.bots
         if not bots:
@@ -108,14 +124,10 @@ class FeishuA2AAdapter:
                 "success": True,
                 "bots": [],
                 "message": "No Feishu bots discovered. Check FEISHU_APP_ID and FEISHU_APP_SECRET.",
-            })
+            }, ensure_ascii=False)
 
-        result = []
-        for agent_id, bot in bots.items():
-            result.append({
-                "agent_id": agent_id,
-                "bot_name": bot.bot_name,
-                "bot_open_id": bot.bot_open_id,
-            })
-
+        result = [
+            {"agent_id": agent_id, "bot_name": bot.bot_name, "bot_open_id": bot.bot_open_id}
+            for agent_id, bot in bots.items()
+        ]
         return json.dumps({"success": True, "bots": result}, ensure_ascii=False)
